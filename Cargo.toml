@@ -1,0 +1,11 @@
+[package]
+name = "jh"
+version = "0.1.0"
+authors = ["Olivier Lauzon <olauzon@gmail.com>"]
+
+[dependencies]
+rustc-serialize = "0.3"
+docopt = "0.6"
+jumphash = { git = "https://github.com/codahale/jumphash", rev = "ae332fd2" } 
+iron = "0.4.*"
+params = "0.5.0"
