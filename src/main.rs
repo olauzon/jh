@@ -1,74 +1,109 @@
-extern crate docopt;
-extern crate iron;
+extern crate actix_web;
+extern crate clap;
 extern crate jumphash;
-extern crate params;
-extern crate rustc_serialize;
 
-use docopt::Docopt;
-use iron::prelude::*;
-use iron::status;
+#[macro_use]
+extern crate serde_derive;
+
+use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use jumphash::hash;
 
-const USAGE: &'static str = "
-Jump Hash
+use std::str::FromStr;
 
-Usage:
-  jh get <key> <buckets>
-  jh server <port>
-  jh server
-  jh (-h | --help)
-  jh --version
-
-Options:
-  -h --help     Show this screen.
-  --version     Show version.
-";
-
-#[derive(Debug, RustcDecodable)]
-struct Args {
-    arg_key: String,
-    arg_buckets: u64,
-    arg_port: Option<u32>,
-    cmd_get: bool,
-    cmd_server: bool,
+#[derive(Deserialize)]
+pub struct GetBucketParams {
+    k: String,
+    n: u32,
 }
 
-fn server(args: &Args) {
-    let port = match args.arg_port {
-        Some(x) => x.to_string(),
-        None => "3000".to_string()
-    };
+impl GetBucketParams {
+    fn get_bucket(&self) -> u32 {
+        hash(&self.k, self.n)
+    }
+}
 
-    println!("Starting server on port {}", port);
-
-    fn h(r: &mut Request) -> IronResult<Response> {
-        use params::{Params, Value};
-        let map = r.get_ref::<Params>().unwrap();
-        match (map.find(&["k"]), map.find(&["n"])) {
-            (Some(&Value::String(ref k)), Some(&Value::String(ref n))) => {
-                let bucket = hash(&k, n.parse::<u32>().unwrap());
-                Ok(Response::with((status::Ok, bucket.to_string())))
-            },
-            (_, _) => Ok(Response::with(status::NotFound)),
-        }
+fn server(port: &str) {
+    fn get_bucket(params: web::Query<GetBucketParams>) -> impl Responder {
+        let bucket = params.get_bucket();
+        HttpResponse::Ok().body(bucket.to_string())
     }
 
-    Iron::new(h).http(["0.0.0.0", &port].join(":").as_str()).unwrap();
+    // HttpServer automatically starts a number of http workers.
+    // By default this number is equal to number of logical CPUs in the system.
+    HttpServer::new(|| App::new().service(web::resource("/").route(web::get().to(get_bucket))))
+        .bind(format!("{}:{}", "0.0.0.0", port))
+        .unwrap()
+        .run()
+        .unwrap();
 }
 
 fn main() {
-    let args: Args = Docopt::new(USAGE)
-                            .and_then(|d| d.decode())
-                            .unwrap_or_else(|e| e.exit());
-    match (args.cmd_get, args.cmd_server) {
-        (true, false) => {
-            let h = hash(&args.arg_key, args.arg_buckets as u32);
-            println!("{}", h);
-        },
-        (false, true) => {
-            server(&args)
-        },
-        (_, _) => {}
+    let matches = clap::App::new("jh: Jump Hash consistent hashing utility")
+        .version("0.2")
+        .author("Olivier Lauzon <olauzon@gmail.com>")
+        .about("Returns a bucket for a key and number of buckets")
+        .subcommand(
+            clap::SubCommand::with_name("get")
+                .about("Get bucket from CLI invocation")
+                .arg(
+                    clap::Arg::with_name("key")
+                        .short("k")
+                        .long("key")
+                        .value_name("KEY")
+                        .help("Value for KEY")
+                        .required(true)
+                        .index(1),
+                )
+                .arg(
+                    clap::Arg::with_name("buckets")
+                        .short("n")
+                        .long("buckets")
+                        .value_name("BUCKETS")
+                        .help("Number of buckets")
+                        .required(true)
+                        .index(2),
+                ),
+        )
+        .subcommand(
+            clap::SubCommand::with_name("server")
+                .about("Start jh http server")
+                .arg(
+                    clap::Arg::with_name("port")
+                        .short("p")
+                        .long("port")
+                        .value_name("PORT")
+                        .help("PORT number")
+                        .default_value("8088"),
+                )
+                .arg(
+                    clap::Arg::with_name("ip")
+                        .short("i")
+                        .long("ip")
+                        .value_name("IP")
+                        .help("IP Interface")
+                        .default_value("0.0.0.0"),
+                ),
+        )
+        .get_matches();
+
+    match matches.subcommand_name() {
+        Some("get") => {
+            let args = matches.subcommand_matches("get").unwrap();
+            let k = args.value_of("key").unwrap().to_string();
+            let n: u32 = FromStr::from_str(args.value_of("buckets").unwrap()).unwrap();
+
+            let bucket = GetBucketParams { k, n }.get_bucket();
+            println!("{}", bucket)
+        }
+        Some("server") => {
+            let args = matches.subcommand_matches("server").unwrap();
+            let port = args.value_of("port").unwrap();
+            let ip = args.value_of("ip").unwrap();
+
+            println!("Starting jh server on {}:{}", ip, port);
+            server(port)
+        }
+        _ => {}
     }
 }
 

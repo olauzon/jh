@@ -19,7 +19,7 @@ jh get "my key string" 1024
 ### HTTP server
 
 ```bash
-jh server 3030
+jh server -p 3030
 ```
 
 ```bash
