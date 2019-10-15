@@ -22,7 +22,7 @@ impl GetBucketParams {
     }
 }
 
-fn server(port: &str) {
+fn server(ip: &str, port: &str) {
     fn get_bucket(params: web::Query<GetBucketParams>) -> impl Responder {
         let bucket = params.get_bucket();
         HttpResponse::Ok().body(bucket.to_string())
@@ -31,7 +31,7 @@ fn server(port: &str) {
     // HttpServer automatically starts a number of http workers.
     // By default this number is equal to number of logical CPUs in the system.
     HttpServer::new(|| App::new().service(web::resource("/").route(web::get().to(get_bucket))))
-        .bind(format!("{}:{}", "0.0.0.0", port))
+        .bind(format!("{}:{}", ip, port))
         .unwrap()
         .run()
         .unwrap();
@@ -101,7 +101,7 @@ fn main() {
             let ip = args.value_of("ip").unwrap();
 
             println!("Starting jh server on {}:{}", ip, port);
-            server(port)
+            server(ip, port)
         }
         _ => {}
     }
