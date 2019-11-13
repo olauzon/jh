@@ -4,8 +4,6 @@ version = "0.2.0"
 authors = ["Olivier Lauzon <olauzon@gmail.com>"]
 
 [dependencies]
-rustc-serialize = "0.3"
-docopt = "0.6"
 jumphash = { git = "https://github.com/olauzon/jumphash", rev = "ae332fd2" } 
 actix-web = "1.0"
 serde = "1.0"
